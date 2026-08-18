@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>1.2 标记、弹窗与自定义图标 · Leaflet 入门</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    #map { height: 100vh; }
+    .btn-group {
+      position: absolute; top: 12px; left: 60px; z-index: 1000; display: flex; gap: 8px;
+    }
+    .btn-group button {
+      padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer;
+      background: #2563eb; color: #fff; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    }
+    .btn-group button:hover { background: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="btn-group">
+    <button onclick="map.flyTo([39.9042, 116.4074], 11)">北京</button>
+    <button onclick="map.flyTo([31.2304, 121.4737], 11)">上海</button>
+    <button onclick="map.flyTo([22.5431, 114.0579], 11)">深圳</button>
+    <button onclick="alert(`当前视图中心: ${map.getCenter()}\n缩放级别: ${map.getZoom()}`)">获取视图状态</button>
+  </div>
+
+  <script>
+    const map = L.map('map').setView([34.0, 108.0], 5); // 全国视角
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // ============================================================
+    // 本课重点：Marker（点标记）、Popup（弹窗）、自定义图标
+    // ============================================================
+
+    // --- 1. 基础 Marker + 弹窗 ---
+    const cities = [
+      { name: '北京', lat: 39.9042, lng: 116.4074, desc: '首都' },
+      { name: '上海', lat: 31.2304, lng: 121.4737, desc: '经济中心' },
+      { name: '广州', lat: 23.1291, lng: 113.2644, desc: '华南门户' },
+      { name: '成都', lat: 30.5728, lng: 104.0668, desc: '天府之国' },
+      { name: '西安', lat: 34.3416, lng: 108.9398, desc: '十三朝古都' },
+      { name: '乌鲁木齐', lat: 43.8256, lng: 87.6168, desc: '亚洲地理中心附近' },
+    ];
+
+    // 批量创建 Marker：实际项目推荐用 L.layerGroup 统一管理
+    const cityLayer = L.layerGroup();
+
+    cities.forEach(c => {
+      L.marker([c.lat, c.lng])
+        .bindPopup(`
+          <div style="text-align:center">
+            <b style="font-size:15px">${c.name}</b><br>
+            <span style="color:#666">${c.desc}</span><br>
+            <code>${c.lng.toFixed(4)}, ${c.lat.toFixed(4)}</code>
+          </div>
+        `)
+        .bindTooltip(c.name)              // 悬停提示（比弹窗更轻量）
+        .addTo(cityLayer);
+    });
+    cityLayer.addTo(map);
+
+    // --- 2. 自定义图标 Marker（用 divIcon，无需图片素材） ---
+    const pulsingIcon = L.divIcon({
+      className: '',                       // 清空默认样式
+      html: `<div style="
+        width:18px; height:18px; border-radius:50%;
+        background:#ef4444; border:3px solid #fff;
+        box-shadow:0 0 0 4px rgba(239,68,68,.4), 0 2px 6px rgba(0,0,0,.3);
+      "></div>`,
+      iconSize: [18, 18],                  // 图标尺寸
+      iconAnchor: [9, 9],                  // 锚点：图标上的哪个点对准坐标（中心）
+    });
+
+    L.marker([39.9042, 116.4074], { icon: pulsingIcon })
+      .addTo(map)
+      .bindPopup('<b>自定义 divIcon 标记</b><br>不依赖图片文件，纯 CSS 渲染');
+
+    // --- 3. 点击地图动态添加标记 ---
+    let userMarkers = L.layerGroup().addTo(map);
+    map.on('click', (e) => {
+      L.marker(e.latlng)
+        .bindPopup(`你点击的位置<br><code>${e.latlng.lng.toFixed(5)}, ${e.latlng.lat.toFixed(5)}</code>`)
+        .addTo(userMarkers);
+    });
+
+    // --- 4. Circle（圆形）与 Polyline（线）---
+    L.circle([31.2304, 121.4737], {
+      radius: 50000,                       // 单位：米
+      color: '#2563eb', fillColor: '#2563eb', fillOpacity: 0.15, weight: 2
+    }).addTo(map).bindPopup('上海 50km 半径圈');
+
+    L.polyline(
+      [[39.9042, 116.4074], [34.3416, 108.9398], [31.2304, 121.4737]],
+      { color: '#f59e0b', weight: 3, dashArray: '8 6' }
+    ).addTo(map).bindPopup('北京 → 西安 → 上海 虚线');
+
+    // 📝 小作业：
+    // 1. 把你家乡的城市加入 cities 数组
+    // 2. 给每个 Marker 换成不同颜色的 divIcon
+    // 3. 画一个连接所有城市的闭合 Polygon（提示：L.polygon，最后一个点会自动闭合）
+  </script>
+</body>
+</html>

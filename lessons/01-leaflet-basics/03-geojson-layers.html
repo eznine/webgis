@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>1.3 GeoJSON 图层与样式 · Leaflet 入门</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    #map { height: 100vh; }
+    .legend {
+      position: absolute; bottom: 24px; right: 12px; z-index: 1000;
+      background: rgba(255,255,255,.95); padding: 12px 16px; border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.15); font-size: 13px; line-height: 1.9;
+      font-family: system-ui, sans-serif;
+    }
+    .legend h4 { margin: 0 0 4px; }
+    .legend .dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="legend">
+    <h4>GeoJSON 图层示例</h4>
+    <div><span class="dot" style="background:#22c55e"></span>点（Point）</div>
+    <div><span class="dot" style="background:#3b82f6"></span>线（LineString）</div>
+    <div><span class="dot" style="background:#a855f7"></span>面（Polygon）</div>
+  </div>
+
+  <script>
+    const map = L.map('map').setView([116.4074, 39.9042], 10);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // ============================================================
+    // GeoJSON：WebGIS 的通用数据格式（RFC 7946）
+    // 六种几何类型：Point / MultiPoint / LineString /
+    //              MultiLineString / Polygon / MultiPolygon
+    // 坐标顺序统一为 [经度, 纬度]（注意与 Leaflet API 相反！）
+    // ============================================================
+
+    const geojsonData = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": { "type": "Point", "coordinates": [116.3974, 39.9093] },
+          "properties": { "name": "故宫", "category": "景点", "level": 5 }
+        },
+        {
+          "type": "Feature",
+          "geometry": { "type": "Point", "coordinates": [116.3267, 39.9012] },
+          "properties": { "name": "白云观", "category": "景点", "level": 3 }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [[116.35, 39.95], [116.40, 39.93], [116.45, 39.96], [116.48, 39.92]]
+          },
+          "properties": { "name": "规划路线A", "category": "路线", "length_km": 12.5 }
+        },
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[
+              [116.36, 39.88], [116.44, 39.88], [116.46, 39.94], [116.37, 39.95], [116.36, 39.88]
+            ]]
+          },
+          "properties": { "name": "核心保护区", "category": "区域", "area_km2": 45.2 }
+        }
+      ]
+    };
+
+    // --- style 函数：根据属性（properties）动态决定样式 ---
+    // 这是专题制图（Thematic Mapping）的核心技巧
+    function styleFeature(feature) {
+      switch (feature.geometry.type) {
+        case 'Point':
+          return {}; // 点样式需用 pointToFactory，见下
+        case 'LineString':
+          return { color: '#3b82f6', weight: 4, opacity: 0.85 };
+        case 'Polygon':
+          return {
+            color: '#a855f7', weight: 2,
+            fillColor: '#a855f7', fillOpacity: 0.2,
+            dashArray: '6 4'
+          };
+      }
+    }
+
+    const geojsonLayer = L.geoJSON(geojsonData, {
+      // 面和线的样式
+      style: styleFeature,
+
+      // 点的样式：自定义 CircleMarker（比默认水滴图标更适合数据可视化）
+      pointToLayer: (feature, latlng) => {
+        const level = feature.properties.level;
+        return L.circleMarker(latlng, {
+          radius: 4 + level * 2,           // 属性驱动大小
+          color: '#fff', weight: 2,
+          fillColor: feature.properties.category === '景点' ? '#22c55e' : '#f97316',
+          fillOpacity: 0.9
+        });
+      },
+
+      // 每个要素的弹窗
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties;
+        let html = `<b>${p.name}</b><br>类型: ${feature.geometry.type}`;
+        if (p.level) html += `<br>等级: ${'⭐'.repeat(p.level)}`;
+        if (p.length_km) html += `<br>长度: ${p.length_km} km`;
+        if (p.area_km2) html += `<br>面积: ${p.area_km2} km²`;
+        layer.bindPopup(html);
+      }
+    }).addTo(map);
+
+    // 自动缩放到数据范围 —— 实际项目最常用的"数据驱动视图"
+    map.fitBounds(geojsonLayer.getBounds().pad(0.2));
+
+    // --- 高亮交互：鼠标悬停时改变样式，移开还原 ---
+    geojsonLayer.eachLayer(layer => {
+      if (layer instanceof L.Path) {   // 只对线/面做高亮
+        const originalStyle = () => styleFeature(layer.feature);
+        layer.on('mouseover', () => layer.setStyle({ weight: 5, fillOpacity: 0.45, opacity: 1 }));
+        layer.on('mouseout',  () => layer.setStyle(originalStyle()));
+      }
+    });
+
+    // --- 从外部文件加载 GeoJSON（需要本地服务器，file:// 协议会跨域报错）---
+    // fetch('data/places.geojson')
+    //   .then(res => res.json())
+    //   .then(data => L.geoJSON(data).addTo(map));
+
+    // 📝 小作业：
+    // 1. 给 FeatureCollection 再加一个 Polygon（比如你家小区的轮廓）
+    // 2. 把点的大小改成由你自定义的属性驱动
+    // 3. 思考：为什么 GeoJSON 是 [lng, lat] 而 Leaflet API 是 [lat, lng]？
+    //    （提示：历史原因，Leaflet 遵循 GIS 传统，GeoJSON 遵循 x,y 数学顺序）
+  </script>
+</body>
+</html>

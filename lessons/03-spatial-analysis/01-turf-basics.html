@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>3.1 turf.js 测量与计算 · 空间分析</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+  <style>
+    #map { height: 100vh; }
+    .toolbar {
+      position: absolute; top: 12px; left: 60px; z-index: 1000; display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .toolbar button {
+      padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer;
+      background: #0f172a; color: #fff; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    .toolbar button.active { background: #0ea5e9; }
+    .result {
+      position: absolute; bottom: 12px; left: 12px; z-index: 1000;
+      background: rgba(15,23,42,.92); color: #e2e8f0; padding: 12px 16px;
+      border-radius: 10px; font-size: 13px; line-height: 1.8; font-family: system-ui, sans-serif;
+      box-shadow: 0 4px 16px rgba(0,0,0,.4); max-width: 400px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="toolbar">
+    <button id="btn-measure" onclick="setMode('measure')">📏 测距</button>
+    <button id="btn-area" onclick="setMode('area')">📐 测面积</button>
+    <button id="btn-clear" onclick="clearAll()">🗑️ 清除</button>
+  </div>
+
+  <div class="result" id="result">选择模式后点击地图：<br>测距 = 依次点击多个点（双击结束）<br>测面积 = 依次点击至少 3 个点（双击结束）</div>
+
+  <script>
+    // ============================================================
+    // turf.js：浏览器端空间分析的事实标准库
+    // 本课实现实战高频功能：距离测量、面积测量
+    // turf 输入输出全部是 GeoJSON，坐标顺序 [lng, lat]
+    // ============================================================
+
+    const map = L.map('map').setView([39.9042, 116.4074], 12);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let mode = null;
+    const points = [];
+    let tempLayer = null;
+
+    function setMode(m) {
+      mode = m;
+      points.length = 0;
+      if (tempLayer) { map.removeLayer(tempLayer); tempLayer = null; }
+      document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+      document.getElementById(m === 'measure' ? 'btn-measure' : 'btn-area').classList.add('active');
+      document.getElementById('result').innerHTML = m === 'measure'
+        ? '📏 测距模式：依次点击路径点，双击结束'
+        : '📐 测面积模式：依次点击顶点（至少3个），双击结束';
+    }
+
+    function clearAll() {
+      mode = null; points.length = 0;
+      if (tempLayer) { map.removeLayer(tempLayer); tempLayer = null; }
+      document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+      document.getElementById('result').textContent = '已清除';
+    }
+
+    map.on('click', (e) => {
+      if (!mode) return;
+      points.push([e.latlng.lng, e.latlng.lat]);   // 注意转成 [lng, lat]
+      renderTemp();
+    });
+
+    map.on('dblclick', () => {
+      if (!mode || points.length < 2) return;
+      finish();
+    });
+
+    function renderTemp() {
+      if (tempLayer) map.removeLayer(tempLayer);
+      const group = L.layerGroup();
+
+      points.forEach(p => group.addLayer(L.circleMarker([p[1], p[0]], { radius: 5, color: '#0ea5e9', fillOpacity: 1 })));
+      if (points.length >= 2) {
+        if (mode === 'measure') {
+          group.addLayer(L.polyline(points.map(p => [p[1], p[0]]), { color: '#0ea5e9', weight: 3 }));
+        } else {
+          group.addLayer(L.polygon(points.map(p => [p[1], p[0]]), { color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.25, weight: 2 }));
+        }
+      }
+      tempLayer = group.addTo(map);
+    }
+
+    function finish() {
+      const resultEl = document.getElementById('result');
+
+      if (mode === 'measure') {
+        // --- turf.distance：逐段计算大圆距离，单位 km ---
+        let total = 0;
+        for (let i = 1; i < points.length; i++) {
+          const from = turf.point(points[i - 1]);
+          const to = turf.point(points[i]);
+          total += turf.distance(from, to, { units: 'kilometers' });
+        }
+        resultEl.innerHTML = `📏 总距离：<b style="color:#7dd3fc;font-size:18px">${total.toFixed(3)} km</b><br>
+                              共 ${points.length - 1} 段 / ${points.length} 个点<br>
+                              ${total < 1 ? `约 ${(total * 1000).toFixed(0)} 米` : `约 ${(total * 1000).toFixed(0)} 米`}`;
+      } else {
+        // --- turf.area：计算多边形面积，单位平方米 ---
+        const polygon = turf.polygon([ [...points, points[0]] ]);  // 闭合环
+        const area = turf.area(polygon);
+        resultEl.innerHTML = `📐 面积：<b style="color:#fbbf24;font-size:18px">${(area / 1e6).toFixed(4)} km²</b><br>
+                              约 ${(area).toFixed(0)} m² / ${(area * 0.0015).toFixed(2)} 亩`;
+      }
+    }
+
+    // turf 常用 API 速查（问 AI 时可直接点名）：
+    // turf.distance(a, b)          两点距离
+    // turf.area(polygon)           面积
+    // turf.length(line)            线长度
+    // turf.buffer(geojson, km)     缓冲区（下一课主角）
+    // turf.booleanPointInPolygon(p, poly)  点是否在面内
+    // turf.bbox(geojson)           外包矩形
+    // turf.center / turf.centroid  中心 / 质心
+    // turf.simplify                抽稀简化
+    // turf.intersect / turf.union  求交 / 合并
+
+    // 📝 小作业：
+    // 1. 测量你家小区的面积（卫星图目视顶点）
+    // 2. 给测距结果加上每段的中点距离标注
+    // 3. 思考：turf.distance 算的是直线还是道路距离？（答案：大圆直线；
+    //    道路距离需要路网数据 + 路径规划服务，如 OSRM / GraphHopper）
+  </script>
+</body>
+</html>

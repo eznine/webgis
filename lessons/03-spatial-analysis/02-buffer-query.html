@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>3.2 缓冲区与空间查询 · 空间分析</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+  <style>
+    #map { height: 100vh; }
+    .panel {
+      position: absolute; top: 12px; right: 12px; z-index: 1000;
+      background: rgba(255,255,255,.96); padding: 14px 18px; border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.15); font-size: 13px; line-height: 1.9;
+      font-family: system-ui, sans-serif; width: 250px;
+    }
+    .panel h4 { margin: 0 0 8px; }
+    .panel input[type=range] { width: 100%; }
+    .panel .hit { color: #dc2626; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="panel">
+    <h4>🎯 缓冲区空间查询</h4>
+    点击地图设置分析中心点：<br>
+    <div style="margin:8px 0">
+      半径：<span id="radius-val">2</span> km
+      <input type="range" id="radius" min="0.5" max="10" step="0.5" value="2" oninput="updateBuffer()">
+    </div>
+    <div>范围内设施：<span class="hit" id="hit-count">-</span></div>
+    <div style="color:#666;font-size:12px">绿点=范围内 / 灰点=范围外</div>
+  </div>
+
+  <script>
+    // ============================================================
+    // 实战场景：周边查询（POI 周边搜索）
+    // 核心思路：中心点 → turf.buffer 生成缓冲区 →
+    //           turf.booleanPointInPolygon 逐点判断 → 高亮结果
+    // （大数据量时此判断应放到后端 PostGIS ST_DWithin）
+    // ============================================================
+
+    const map = L.map('map').setView([116.4074, 39.9042], 12);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // --- 1. 模拟 60 个随机 POI（实际项目来自 API/数据库）---
+    const pois = turf.randomPoint(60, { bbox: [116.25, 39.80, 116.60, 40.02] });
+    pois.features.forEach((f, i) => f.properties = { name: `设施-${String(i+1).padStart(2,'0')}`, id: i });
+
+    const poiLayer = L.geoJSON(pois, {
+      pointToLayer: (f, ll) => L.circleMarker(ll, {
+        radius: 6, color: '#fff', weight: 1.5,
+        fillColor: '#94a3b8', fillOpacity: 0.9          // 默认灰色
+      }).bindPopup(`id: ${f.properties.id}`)
+    }).addTo(map);
+
+    // --- 2. 状态变量 ---
+    let center = turf.point([116.4074, 39.9042]);
+    let bufferGeojson = null;
+    let bufferLayer = null;
+    let centerMarker = L.circleMarker([39.9042, 116.4074], {
+      radius: 8, color: '#dc2626', fillColor: '#dc2626', fillOpacity: 1
+    }).addTo(map).bindTooltip('分析中心（点击地图移动我）');
+
+    updateBuffer();
+
+    // --- 3. 生成缓冲区 + 空间判断 ---
+    function updateBuffer() {
+      const radiusKm = parseFloat(document.getElementById('radius').value);
+      document.getElementById('radius-val').textContent = radiusKm;
+
+      // turf.buffer：给点/线/面生成缓冲区（默认按球面距离，比简单画圆更精确）
+      bufferGeojson = turf.buffer(center, radiusKm, { units: 'kilometers' });
+
+      if (bufferLayer) map.removeLayer(bufferLayer);
+      bufferLayer = L.geoJSON(bufferGeojson, {
+        style: { color: '#dc2626', fillColor: '#fca5a5', fillOpacity: 0.15, weight: 2, dashArray: '5 5' }
+      }).addTo(map);
+
+      // 逐点判断：booleanPointInPolygon（空间查询的本质）
+      let hits = 0;
+      poiLayer.eachLayer(layer => {
+        const pt = turf.point(layer.feature.geometry.coordinates);
+        const inside = turf.booleanPointInPolygon(pt, bufferGeojson);
+        layer.setStyle({ fillColor: inside ? '#16a34a' : '#94a3b8' });
+        if (inside) hits++;
+      });
+      document.getElementById('hit-count').textContent = `${hits} / ${pois.features.length}`;
+    }
+
+    // --- 4. 点击地图移动分析中心 ---
+    map.on('click', (e) => {
+      center = turf.point([e.latlng.lng, e.latlng.lat]);
+      centerMarker.setLatLng(e.latlng);
+      updateBuffer();
+    });
+
+    // 📌 性能对比（面试 & 实战高频）：
+    // 浏览器 turf：适合 < 几千个要素的即时分析
+    // 后端 PostGIS：SELECT * FROM pois
+    //   WHERE ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(lng,lat),4326), 2000);
+    //   （ geography 类型单位为米，且能走空间索引 GiST，百万级毫秒响应 ）
+    //
+    // 📝 小作业：
+    // 1. 把"点缓冲"改成"线缓冲"：画一条路，查路两侧 500m 内设施
+    // 2. 加一个下拉框切换分析目标类型
+    // 3. 进阶：用 turf.nearestPoint 找出离中心最近的设施并在弹窗标注
+  </script>
+</body>
+</html>

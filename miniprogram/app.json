@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/canteen/canteen"
+  ],
+  "window": {
+    "navigationBarTitleText": "校园生活地图",
+    "navigationBarBackgroundColor": "#0f172a",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f1f5f9"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

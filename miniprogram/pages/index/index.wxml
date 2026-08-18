@@ -1,0 +1,56 @@
+<!-- 首页：地图 + 分类筛选 + 点位列表 + 今天吃什么 -->
+<view class="page">
+
+  <!-- 地图（腾讯地图组件，GCJ-02 坐标系） -->
+  <map
+    id="campus-map"
+    class="map"
+    latitude="{{center.lat}}"
+    longitude="{{center.lng}}"
+    scale="16"
+    markers="{{markers}}"
+    bindmarkertap="onMarkerTap"
+    show-location
+  ></map>
+
+  <!-- 分类筛选 -->
+  <scroll-view class="cat-bar" scroll-x>
+    <view
+      wx:for="{{categories}}" wx:key="*this"
+      class="cat-item {{currentCat === item ? 'active' : ''}}"
+      data-cat="{{item}}" bindtap="switchCat"
+    >
+      {{item === 'all' ? '全部' : item === 'canteen' ? '🍜 食堂' : item === 'express' ? '📦 快递' : '🌸 景观'}}
+    </view>
+  </scroll-view>
+
+  <!-- 今天吃什么 -->
+  <view class="card eat-card">
+    <view class="eat-title">🎯 选择困难症救星</view>
+    <button class="btn-primary" bindtap="whatToEat">今天吃什么</button>
+    <view wx:if="{{randomPick}}" class="eat-result">
+      就吃：<text class="eat-pick">{{randomPick}}</text>
+    </view>
+    <view class="eat-tip">规则：好评率 ≥ 70% 的档口才能进入抽奖池</view>
+  </view>
+
+  <!-- 点位列表 -->
+  <view class="card">
+    <view class="list-title">📍 校园点位（{{poiList.length}}）</view>
+    <view
+      wx:for="{{poiList}}" wx:key="id"
+      class="poi-item"
+      hover-class="poi-hover"
+      data-id="{{item.id}}" data-name="{{item.name}}"
+      bindtap="{{item.category === 'canteen' ? 'goCanteen' : ''}}"
+    >
+      <view class="poi-icon">{{item.category === 'canteen' ? '🍜' : item.category === 'express' ? '📦' : '🌸'}}</view>
+      <view class="poi-body">
+        <view class="poi-name">{{item.name}}</view>
+        <view class="poi-desc">{{item.desc}}</view>
+      </view>
+      <view wx:if="{{item.category === 'canteen'}}" class="poi-arrow">档口 →</view>
+    </view>
+  </view>
+
+</view>

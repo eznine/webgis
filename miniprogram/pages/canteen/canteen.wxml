@@ -1,0 +1,41 @@
+<!-- 食堂详情：档口列表 + 投票 -->
+<view class="page">
+
+  <view class="card head-card">
+    <view class="canteen-name">🍜 {{canteen.name}}</view>
+    <view class="canteen-desc">{{canteen.desc}}</view>
+    <view class="canteen-tip">💡 投票数据仅保存在你的手机上（v0.1 无后端）</view>
+  </view>
+
+  <view class="card" wx:for="{{stalls}}" wx:key="id">
+    <view class="stall-head">
+      <view class="stall-name">{{item.name}}</view>
+      <view class="good-rate {{item.goodRate >= 70 ? 'rate-high' : item.goodRate >= 50 ? 'rate-mid' : 'rate-low'}}">
+        好评 {{item.goodRate}}%
+      </view>
+    </view>
+    <view class="stall-info">招牌：{{item.signature}} · {{item.price}}</view>
+
+    <!-- 好评率进度条 -->
+    <view class="rate-bar">
+      <view class="rate-fill" style="width: {{item.goodRate}}%"></view>
+    </view>
+
+    <!-- 三键投票 -->
+    <view class="vote-row">
+      <view
+        class="vote-btn {{item.myChoice === 'good' ? 'v-good on' : 'v-good'}}"
+        data-stall-id="{{item.id}}" data-choice="good" bindtap="vote"
+      >👍 好吃 {{item.votes.good}}</view>
+      <view
+        class="vote-btn {{item.myChoice === 'soso' ? 'v-soso on' : 'v-soso'}}"
+        data-stall-id="{{item.id}}" data-choice="soso" bindtap="vote"
+      >😐 一般 {{item.votes.soso}}</view>
+      <view
+        class="vote-btn {{item.myChoice === 'bad' ? 'v-bad on' : 'v-bad'}}"
+        data-stall-id="{{item.id}}" data-choice="bad" bindtap="vote"
+      >⚠️ 避雷 {{item.votes.bad}}</view>
+    </view>
+  </view>
+
+</view>

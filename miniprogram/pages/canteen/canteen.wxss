@@ -1,0 +1,39 @@
+.page { padding-bottom: 40rpx; }
+
+.head-card { text-align: center; }
+.canteen-name { font-size: 36rpx; font-weight: 800; }
+.canteen-desc { color: #64748b; margin-top: 8rpx; }
+.canteen-tip { font-size: 22rpx; color: #94a3b8; margin-top: 14rpx; }
+
+.stall-head {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.stall-name { font-size: 32rpx; font-weight: 700; }
+.good-rate { font-size: 26rpx; font-weight: 700; }
+.rate-high { color: #16a34a; }
+.rate-mid  { color: #f59e0b; }
+.rate-low  { color: #dc2626; }
+
+.stall-info { color: #64748b; font-size: 26rpx; margin: 8rpx 0 14rpx; }
+
+.rate-bar {
+  height: 10rpx; border-radius: 999rpx;
+  background: #f1f5f9; overflow: hidden; margin-bottom: 18rpx;
+}
+.rate-fill {
+  height: 100%; border-radius: 999rpx;
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+  transition: width .4s;
+}
+
+.vote-row { display: flex; gap: 14rpx; }
+.vote-btn {
+  flex: 1; text-align: center;
+  padding: 14rpx 0; border-radius: 12rpx;
+  font-size: 24rpx; border: 1rpx solid #e2e8f0;
+  color: #475569; background: #f8fafc;
+}
+.vote-btn.on { color: #fff; font-weight: 700; }
+.v-good.on { background: #16a34a; border-color: #16a34a; }
+.v-soso.on { background: #f59e0b; border-color: #f59e0b; }
+.v-bad.on  { background: #dc2626; border-color: #dc2626; }

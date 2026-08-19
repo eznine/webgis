@@ -2,10 +2,14 @@
 // ============================================================
 // 校园数据文件 —— 全校唯一需要你维护的文件
 //
-// ✅ 坐标来源：用户实地采集（2026-08-19 三批，74 点位）
+// ✅ 坐标来源：用户实地采集（2026-08-19 三批，86 点位）
 // 🗂️ ID 规划：100-199 宿舍/浴室/快递/超市 | 200-299 餐厅/小吃饮品
-//            300-399 教学楼 | 400-499 办公楼/其他/体育
+//            300-399 教学楼 | 400-499 办公楼/其他/体育 | 500+ 新增
 // ⚠️ 腾讯地图用 GCJ-02 坐标系
+// 🆕 可选字段：
+//   major: true → 地标（餐厅/教学楼/操场等），低倍率下也优先显示名称
+//   note: "..." → 纠错说明（新建/更名/合并/待复核），随选点卡展示
+//                 ——底图标注可能过时，note 标注的就是"你比地图新/对"的地方
 // ============================================================
 
 // 校园中心点（全部点位外包中心，含北区）
@@ -14,10 +18,10 @@ const CAMPUS_CENTER = { lat: 37.746266, lng: 112.66296 };
 // 一级：点位
 const POIS = [
   // ==== 餐厅（canteen，新竹+麦道已合并）====
-  { id: 200, name: '新竹·麦道餐厅', category: 'canteen', lat: 37.741612, lng: 112.663259, desc: '一层新竹；二层麦道' },
-  { id: 201, name: '青蓝餐厅', category: 'canteen', lat: 37.740711, lng: 112.660614, desc: '一层/三层为餐厅' },
-  { id: 202, name: '诚得餐厅', category: 'canteen', lat: 37.742795, lng: 112.660475, desc: '餐厅点位' },
-  { id: 203, name: '北区餐厅', category: 'canteen', lat: 37.75021, lng: 112.664211, desc: '餐厅点位' },
+  { id: 200, name: '新竹·麦道餐厅', category: 'canteen', lat: 37.741612, lng: 112.663259, desc: '一层新竹；二层麦道', major: true, note: '原「新竹餐厅」「麦道餐厅」两栋合并为一栋双层餐厅' },
+  { id: 201, name: '青蓝餐厅', category: 'canteen', lat: 37.740711, lng: 112.660614, desc: '一层/三层为餐厅', major: true },
+  { id: 202, name: '诚得餐厅', category: 'canteen', lat: 37.742795, lng: 112.660475, desc: '餐厅点位', major: true },
+  { id: 203, name: '北区餐厅', category: 'canteen', lat: 37.75021, lng: 112.664211, desc: '餐厅点位', major: true, note: '北区新校区食堂，地图未更新' },
 
   // ==== 小吃饮品（snack）====
   { id: 204, name: '幸运咖', category: 'snack', lat: 37.742545, lng: 112.660401, desc: '现磨咖啡' },
@@ -49,8 +53,8 @@ const POIS = [
   { id: 120, name: '北区2号宿舍楼', category: 'dorm', lat: 37.74895, lng: 112.661485, desc: '宿舍点位' },
   { id: 121, name: '北区3号宿舍楼', category: 'dorm', lat: 37.749451, lng: 112.661503, desc: '宿舍点位' },
   { id: 122, name: '北区6号宿舍楼', category: 'dorm', lat: 37.74981, lng: 112.661495, desc: '宿舍点位' },
-  { id: 123, name: '北区3号宿舍楼', category: 'dorm', lat: 37.749937, lng: 112.663135, desc: '宿舍点位' },
-  { id: 124, name: '新宿舍楼', category: 'dorm', lat: 37.742063, lng: 112.665378, desc: '宿舍点位' },
+  { id: 123, name: '北区3号宿舍楼', category: 'dorm', lat: 37.749937, lng: 112.663135, desc: '宿舍点位', note: '⚠️ 待复核楼号（与 id 121 重名）' },
+  { id: 124, name: '新宿舍楼', category: 'dorm', lat: 37.742063, lng: 112.665378, desc: '宿舍点位', note: '新建宿舍楼，地图未更新' },
   { id: 125, name: '23号宿舍楼', category: 'dorm', lat: 37.742144, lng: 112.666991, desc: '宿舍点位' },
   { id: 126, name: '21号宿舍楼', category: 'dorm', lat: 37.74407, lng: 112.664984, desc: '宿舍点位' },
   { id: 127, name: '22号宿舍楼', category: 'dorm', lat: 37.744323, lng: 112.664911, desc: '宿舍点位' },
@@ -70,16 +74,16 @@ const POIS = [
   { id: 137, name: '三晋消费帮扶超市', category: 'shop', lat: 37.74083, lng: 112.66445, desc: '超市点位' },
 
   // ==== 教学楼（teaching）====
-  { id: 300, name: '5号教学楼', category: 'teaching', lat: 37.742791, lng: 112.662441, desc: '教学楼点位' },
-  { id: 301, name: '4号教学楼', category: 'teaching', lat: 37.742786, lng: 112.663199, desc: '教学楼点位' },
-  { id: 302, name: '3号教学楼', category: 'teaching', lat: 37.742767, lng: 112.663969, desc: '教学楼点位' },
-  { id: 303, name: '实验楼', category: 'teaching', lat: 37.743837, lng: 112.662705, desc: '教学楼点位' },
-  { id: 304, name: '信息楼', category: 'teaching', lat: 37.743868, lng: 112.66384, desc: '教学楼点位' },
-  { id: 305, name: '图书馆', category: 'teaching', lat: 37.743389, lng: 112.661708, desc: '教学楼点位' },
-  { id: 306, name: '北区5号教学楼', category: 'teaching', lat: 37.75209, lng: 112.661047, desc: '教学楼点位' },
+  { id: 300, name: '5号教学楼', category: 'teaching', lat: 37.742791, lng: 112.662441, desc: '教学楼点位', major: true },
+  { id: 301, name: '4号教学楼', category: 'teaching', lat: 37.742786, lng: 112.663199, desc: '教学楼点位', major: true },
+  { id: 302, name: '3号教学楼', category: 'teaching', lat: 37.742767, lng: 112.663969, desc: '教学楼点位', major: true },
+  { id: 303, name: '实验楼', category: 'teaching', lat: 37.743837, lng: 112.662705, desc: '教学楼点位', major: true },
+  { id: 304, name: '信息楼', category: 'teaching', lat: 37.743868, lng: 112.66384, desc: '教学楼点位', major: true },
+  { id: 305, name: '图书馆', category: 'teaching', lat: 37.743389, lng: 112.661708, desc: '教学楼点位', major: true },
+  { id: 306, name: '北区5号教学楼', category: 'teaching', lat: 37.75209, lng: 112.661047, desc: '教学楼点位', major: true, note: '北区新校区教学楼，地图未更新' },
   { id: 307, name: '北区2号教学楼', category: 'teaching', lat: 37.750997, lng: 112.661211, desc: '化材学院' },
-  { id: 308, name: '北区图书馆', category: 'teaching', lat: 37.751477, lng: 112.662163, desc: '教学楼点位' },
-  { id: 309, name: '北区1号教学楼', category: 'teaching', lat: 37.752797, lng: 112.662038, desc: '教学楼点位' },
+  { id: 308, name: '北区图书馆', category: 'teaching', lat: 37.751477, lng: 112.662163, desc: '教学楼点位', major: true },
+  { id: 309, name: '北区1号教学楼', category: 'teaching', lat: 37.752797, lng: 112.662038, desc: '教学楼点位', major: true },
   { id: 310, name: '北区3号教学楼', category: 'teaching', lat: 37.751353, lng: 112.663141, desc: '教学楼点位' },
   { id: 311, name: '7号教学楼', category: 'teaching', lat: 37.74273, lng: 112.658188, desc: '体育学院' },
   { id: 312, name: '8号教学楼', category: 'teaching', lat: 37.744389, lng: 112.663042, desc: '教学楼点位' },
@@ -87,7 +91,7 @@ const POIS = [
   { id: 314, name: '2号教学楼', category: 'teaching', lat: 37.74262, lng: 112.666189, desc: '教学楼点位' },
   { id: 315, name: '9号教学楼', category: 'teaching', lat: 37.744539, lng: 112.66587, desc: '教学楼点位' },
   { id: 316, name: '10号教学楼', category: 'teaching', lat: 37.744249, lng: 112.666944, desc: '教学楼点位' },
-  { id: 317, name: '2号教学楼(东)', category: 'teaching', lat: 37.744454, lng: 112.66688, desc: '教学楼点位' },
+  { id: 317, name: '2号教学楼(东)', category: 'teaching', lat: 37.744454, lng: 112.66688, desc: '教学楼点位', note: '2号教学楼扩建部分，地图未更新' },
 
   // ==== 办公楼（office）====
   { id: 400, name: '北区1号办公楼', category: 'office', lat: 37.752437, lng: 112.662091, desc: '办公楼点位' },
@@ -96,7 +100,7 @@ const POIS = [
   { id: 403, name: '行政楼', category: 'office', lat: 37.743097, lng: 112.664955, desc: '办公楼点位' },
 
   // ==== 其他（other）====
-  { id: 410, name: '校医院', category: 'other', lat: 37.744112, lng: 112.665651, desc: '校医院' },
+  { id: 410, name: '校医院', category: 'other', lat: 37.744112, lng: 112.665651, desc: '校医院', major: true },
   { id: 411, name: '科学会堂', category: 'other', lat: 37.741836, lng: 112.661616, desc: '会堂' },
   { id: 412, name: '文化艺术活动中心', category: 'other', lat: 37.750214, lng: 112.664746, desc: '活动中心' },
   { id: 413, name: '音乐学院', category: 'office', lat: 37.741281, lng: 112.658239, desc: '学院楼' },
@@ -111,10 +115,9 @@ const POIS = [
   { id: 424, name: '羽毛球场', category: 'sport', lat: 37.741339, lng: 112.661784, desc: '羽毛球场' },
   { id: 425, name: '乒乓球场', category: 'sport', lat: 37.741109, lng: 112.661474, desc: '乒乓球场' },
   { id: 426, name: '网球场', category: 'sport', lat: 37.744235, lng: 112.658961, desc: '网球场' },
-  { id: 427, name: '南区操场', category: 'sport', lat: 37.743081, lng: 112.659565, desc: '操场' },
-  { id: 428, name: '北区操场', category: 'sport', lat: 37.749249, lng: 112.659964, desc: '操场' },
+  { id: 427, name: '南区操场', category: 'sport', lat: 37.743081, lng: 112.659565, desc: '操场', major: true },
+  { id: 428, name: '北区操场', category: 'sport', lat: 37.749249, lng: 112.659964, desc: '操场', major: true },
   { id: 500, name: '6号教学楼', category: 'teaching', lat: 37.741793, lng: 112.662509, desc: '教学楼点位' },
-  { id: 501, name: '毓秀湖', category: 'other', lat: 37.746544, lng: 112.659385, desc: '其他点位' },
   { id: 502, name: '健身房', category: 'sport', lat: 37.743243, lng: 112.658286, desc: '体育点位' },
   { id: 503, name: '学术交流中心', category: 'other', lat: 37.743043, lng: 112.660463, desc: '体育点位' },
   { id: 504, name: '化材学院报告厅', category: 'other', lat: 37.750988, lng: 112.661283, desc: '其他点位' },

@@ -106,6 +106,8 @@
   .bar.show { transform:translateY(0); }
   .bar-name { font-size:17px; font-weight:800; color:var(--text); }
   .bar-meta { font-size:12px; color:var(--text-sub); margin-top:4px; }
+  .bar-note { font-size:12px; color:#b45309; line-height:1.5; margin-top:6px; display:none; }
+  .bar-note.show { display:block; }
   .bar-actions { display:flex; gap:10px; margin-top:12px; }
   .bar-btn {
     flex:1; height:40px; border-radius:20px; border:none;
@@ -142,13 +144,23 @@
   .fab:active { transform:scale(.92); }
 
   /* ========== Leaflet 覆盖样式 ========== */
-  .poi-label {
-    background:#fff !important; border:1px solid #e2e8f0 !important;
-    border-radius:8px !important; padding:2px 6px !important;
-    font-size:10px !important; color:#1e293b !important;
-    box-shadow:0 2px 8px rgba(15,23,42,.1) !important;
+  /* 地图文字标注：无底块 + 白描边（halo），像原生地图标注一样叠在底图上 */
+  .poi-label, .label-chip {
+    background:transparent !important; border:none !important;
+    border-radius:0 !important; box-shadow:none !important;
+    font-size:11px !important; font-weight:650 !important; color:#1e293b !important;
+    text-shadow:
+      0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff,
+      0 0 5px #fff, 0 0 8px rgba(255,255,255,.85) !important;
   }
   .poi-label::before { display:none; }
+  .label-chip {
+    width:100%; height:100%; box-sizing:border-box;
+    display:flex; align-items:center; justify-content:center;
+    white-space:nowrap; cursor:pointer;
+    transition:transform .15s;
+  }
+  .label-chip:active { transform:scale(.94); }
   .pin-wrap { position:relative; width:32px; height:40px; }
   .pin-wrap img { width:32px; height:40px; filter:drop-shadow(0 3px 4px rgba(15,23,42,.3)); }
   .leaflet-container { font:inherit; }
@@ -198,6 +210,7 @@
 <div class="bar glass" id="bar">
   <div class="bar-name" id="barName"></div>
   <div class="bar-meta" id="barMeta"></div>
+  <div class="bar-note" id="barNote"></div>
   <div class="bar-actions">
     <button class="bar-btn ghost" id="barFocus">🔎 查看</button>
     <button class="bar-btn primary" id="barNav">🧭 去这里</button>
@@ -207,13 +220,16 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="campus-data.js"></script>
+<script src="campus-data.js?v=3"></script>
 <script>
 /* ============================================================
    校园生活指南 · 网页版
-   ⚠️ 如需「去这里」跳转腾讯地图导航：到 lbs.qq.com 免费申请 key 填入下方
+   标注策略：底图标注不可信 → 自绘纯文字标注层做"地面真值"
+   - 不画大头针，86 个点位以描边文字标注；缩放门槛 16 级，过线后全部文字一起出现（不分批、无优先级）
+   - note 字段记录纠错说明（新建/更名/合并），随选点卡展示
+   - 导航：腾讯地图 URI API（key 已填，步行路线直达）
    ============================================================ */
-const QQ_MAP_KEY = ''; // ← 腾讯地图 Web key，申请后填这里
+const QQ_MAP_KEY = 'ZA2BZ-YGY67-VNVXQ-HO4BR-OWFBH-7WFJW'; // ← 腾讯位置服务 key（已验证：导航/逆地理均可用）
 const MAPBOX_TOKEN = ''; // ← 想要 Mapbox 底图：mapbox.com 免费注册拿 token 填这里（每月 5 万次免费加载）
 
 /* ---------- 坐标纠偏：GCJ-02 ⇄ WGS-84 ----------
@@ -288,6 +304,7 @@ function initMap() {
     .setView(toMapLatLng(CAMPUS_CENTER.lat, CAMPUS_CENTER.lng, false), 16);
   currentTile = L.tileLayer(BASEMAPS[basemapIdx].url, BASEMAPS[basemapIdx].opts).addTo(map);
   markerLayer = L.layerGroup().addTo(map);
+  map.on('zoomend', renderMarkers); // 倍率变化 → 大头针/标注分级切换
   renderMarkers();
 }
 
@@ -299,24 +316,32 @@ function filteredPois() {
     return true;
   });
 }
+/* ---------- 标注缩放门槛 ----------
+   缩放到 >= 16 级：86 个点位文字全部一起显示（不分批、无优先级）
+   更低倍率：地图干净无字；搜索/筛选不受门槛限制 */
+const LABEL_MIN_ZOOM = 16;
+
 function renderMarkers() {
   markerLayer.clearLayers();
-  filteredPois().forEach(p => {
+  // 纯文字标注模式：不画图钉，所有点位一律以描边文字显示
+  visiblePois().forEach(p => {
+    if (!showLabel) return; // 标注总开关关闭 → 地图保持干净
+    const ll = toMapLatLng(p.lat, p.lng, false);
+    const w = p.name.length * 12 + 22;
     const icon = L.divIcon({
       className: '',
-      html: `<div class="pin-wrap"><img src="pins/${p.category}.png" alt=""></div>`,
-      iconSize: [32, 40], iconAnchor: [16, 38],
+      html: `<div class="label-chip">${p.name}</div>`,
+      iconSize: [w, 26], iconAnchor: [w / 2, 13],
     });
-    const m = L.marker(toMapLatLng(p.lat, p.lng, false), { icon }).on('click', () => showPoi(p));
-    if (showLabel) {
-      m.bindTooltip(p.name, {
-        permanent: true, direction: 'top', offset: [-4, -36], className: 'poi-label',
-      });
-    }
+    const m = L.marker(ll, { icon }).on('click', () => showPoi(p));
     m.addTo(markerLayer);
     markers[p.id] = m;
   });
   renderList();
+}
+function visiblePois() {
+  if (keyword || currentCat !== 'all') return filteredPois(); // 搜索/筛选：直接全量
+  return map.getZoom() >= LABEL_MIN_ZOOM ? filteredPois() : []; // 过线 → 全部一起出现
 }
 
 /* ---------- 分类胶囊 ---------- */
@@ -406,6 +431,9 @@ function showPoi(p) {
   if (myPos) distStr = ` · 距你 ${fmtDist(distToMe(p))}`;
   $('barName').textContent = meta.icon + ' ' + p.name;
   $('barMeta').textContent = `${meta.label}${p.desc ? ' · ' + p.desc : ''}${distStr}`;
+  const noteBox = $('barNote');
+  if (p.note) { noteBox.textContent = '✏️ ' + p.note; noteBox.classList.add('show'); }
+  else { noteBox.classList.remove('show'); }
   $('bar').classList.add('show');
   $('barClose').classList.add('show');
 }
@@ -413,6 +441,7 @@ function closeBar() {
   selected = null;
   $('bar').classList.remove('show');
   $('barClose').classList.remove('show');
+  $('barNote').classList.remove('show');
 }
 $('barClose').onclick = closeBar;
 $('barFocus').onclick = () => selected && flyTo(selected);
@@ -421,7 +450,7 @@ $('barNav').onclick = () => {
   const { lat, lng, name } = selected;
   if (QQ_MAP_KEY) {
     // 腾讯地图 URI API：从我的位置步行导航过去（手机打开体验最佳）
-    const url = `https://apis.map.qq.com/uri/v1/routeplan?type=walk&tocoord=${lat},${lng}&to=${encodeURIComponent(name)}&referer=${QQ_MAP_KEY}`;
+    const url = `https://apis.map.qq.com/uri/v1/routeplan?type=walk&tocoord=${lat},${lng}&to=${encodeURIComponent(name)}&referer=campus-guide&key=${QQ_MAP_KEY}`;
     window.open(url, '_blank');
   } else {
     // 未配置 key：地图画直线示意 + 打开腾讯地图网页版
@@ -479,7 +508,7 @@ $('fabLabel').onclick = () => {
   showLabel = !showLabel;
   $('fabLabel').classList.toggle('on', showLabel);
   renderMarkers();
-  toast(showLabel ? '已显示点位名称' : '已隐藏点位名称', 1200);
+  toast(showLabel ? '已显示名称标注' : '已隐藏名称标注', 1200);
 };
 
 /* ---------- 搜索 ---------- */

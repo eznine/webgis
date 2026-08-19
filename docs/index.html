@@ -188,6 +188,7 @@
 
 <!-- 悬浮按钮 -->
 <div class="fab-stack" id="fabStack">
+  <div class="fab" id="fabBasemap" title="切换底图">🎨</div>
   <div class="fab" id="fabLocate" title="定位">◎</div>
   <div class="fab on" id="fabLabel" title="标注开关">🏷️</div>
 </div>
@@ -213,6 +214,48 @@
    ⚠️ 如需「去这里」跳转腾讯地图导航：到 lbs.qq.com 免费申请 key 填入下方
    ============================================================ */
 const QQ_MAP_KEY = ''; // ← 腾讯地图 Web key，申请后填这里
+const MAPBOX_TOKEN = ''; // ← 想要 Mapbox 底图：mapbox.com 免费注册拿 token 填这里（每月 5 万次免费加载）
+
+/* ---------- 坐标纠偏：GCJ-02 ⇄ WGS-84 ----------
+   数据源是 GCJ-02（腾讯/高德系）；国际底图（CARTO/Mapbox/Esri）是 WGS-84
+   标准换算算法，误差 < 1m */
+const _PI = Math.PI, _A = 6378245.0, _EE = 0.00669342162296594323;
+function _tLat(x, y) { let r = -100 + 2*x + 3*y + .2*y*y + .1*x*y + .2*Math.sqrt(Math.abs(x)); r += (20*Math.sin(6*x*_PI) + 20*Math.sin(2*x*_PI))*2/3; r += (20*Math.sin(y*_PI) + 40*Math.sin(y/3*_PI))*2/3; r += (160*Math.sin(y/12*_PI) + 320*Math.sin(y*_PI/30))*2/3; return r; }
+function _tLng(x, y) { let r = 300 + x + 2*y + .1*x*x + .1*x*y + .1*Math.sqrt(Math.abs(x)); r += (20*Math.sin(6*x*_PI) + 20*Math.sin(2*x*_PI))*2/3; r += (20*Math.sin(x*_PI) + 40*Math.sin(x/3*_PI))*2/3; r += (150*Math.sin(x/12*_PI) + 300*Math.sin(x/30*_PI))*2/3; return r; }
+function _delta(lat, lng) { let dLat = _tLat(lng-105, lat-35), dLng = _tLng(lng-105, lat-35); const rad = lat/180*_PI; let magic = Math.sin(rad); magic = 1 - _EE*magic*magic; const sq = Math.sqrt(magic); dLat = dLat*180/((_A*(1-_EE))/(magic*sq)*_PI); dLng = dLng*180/(_A/sq*Math.cos(rad)*_PI); return { lat: dLat, lng: dLng }; }
+function gcj2wgs(lat, lng) { const d = _delta(lat, lng); return { lat: lat-d.lat, lng: lng-d.lng }; }
+function wgs2gcj(lat, lng) { const d = _delta(lat, lng); return { lat: lat+d.lat, lng: lng+d.lng }; }
+
+/* ---------- 底图配置（🎨 按钮循环切换） ---------- */
+const BASEMAPS = [
+  { key: 'voyager', name: 'Voyager · 清新明亮', wgs: true,
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    opts: { subdomains: 'abcd', maxZoom: 20, attribution: '© CARTO © OpenStreetMap' } },
+  { key: 'positron', name: 'Positron · 极简灰', wgs: true,
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    opts: { subdomains: 'abcd', maxZoom: 20, attribution: '© CARTO © OpenStreetMap' } },
+  { key: 'dark', name: 'Dark Matter · 夜景', wgs: true,
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    opts: { subdomains: 'abcd', maxZoom: 20, attribution: '© CARTO © OpenStreetMap' } },
+  { key: 'sat', name: 'Esri · 卫星影像', wgs: true,
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    opts: { maxZoom: 19, attribution: '© Esri' } },
+  { key: 'tencent', name: '腾讯官方', wgs: false,
+    url: 'https://rt{s}.map.gtimg.com/tile?z={z}&x={x}&y={-y}&type=vector&styleid=3',
+    opts: { subdomains: ['0','1','2','3'], tms: true, maxZoom: 19 } },
+];
+if (MAPBOX_TOKEN) BASEMAPS.unshift({ key: 'mapbox', name: 'Mapbox Streets', wgs: true,
+  url: `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`,
+  opts: { maxZoom: 20, attribution: '© Mapbox © OpenStreetMap', tileSize: 512, zoomOffset: -1 } });
+let basemapIdx = 0;
+let currentTile = null;
+// 数据坐标(GCJ-02 或 WGS-84) → 当前底图坐标
+function toMapLatLng(lat, lng, isWgs) {
+  const bm = BASEMAPS[basemapIdx];
+  if (bm.wgs) { if (isWgs) return [lat, lng]; const w = gcj2wgs(lat, lng); return [w.lat, w.lng]; }
+  if (isWgs) { const g = wgs2gcj(lat, lng); return [g.lat, g.lng]; }
+  return [lat, lng];
+}
 
 const { CAMPUS_CENTER, POIS, CATEGORY_META } = window.CAMPUS_DATA;
 const CAT_KEYS = Object.keys(CATEGORY_META);
@@ -242,11 +285,8 @@ function fmtDist(m) { return m < 1000 ? Math.round(m) + ' m' : (m/1000).toFixed(
 /* ---------- 地图初始化 ---------- */
 function initMap() {
   map = L.map('map', { zoomControl: false, attributionControl: false })
-    .setView([CAMPUS_CENTER.lat, CAMPUS_CENTER.lng], 16);
-  // 腾讯官方瓦片（GCJ-02，与小程序底图一致坐标系）
-  L.tileLayer('https://rt{s}.map.gtimg.com/tile?z={z}&x={x}&y={-y}&type=vector&styleid=3', {
-    subdomains: ['0', '1', '2', '3'], tms: true, maxZoom: 19,
-  }).addTo(map);
+    .setView(toMapLatLng(CAMPUS_CENTER.lat, CAMPUS_CENTER.lng, false), 16);
+  currentTile = L.tileLayer(BASEMAPS[basemapIdx].url, BASEMAPS[basemapIdx].opts).addTo(map);
   markerLayer = L.layerGroup().addTo(map);
   renderMarkers();
 }
@@ -267,7 +307,7 @@ function renderMarkers() {
       html: `<div class="pin-wrap"><img src="pins/${p.category}.png" alt=""></div>`,
       iconSize: [32, 40], iconAnchor: [16, 38],
     });
-    const m = L.marker([p.lat, p.lng], { icon }).on('click', () => showPoi(p));
+    const m = L.marker(toMapLatLng(p.lat, p.lng, false), { icon }).on('click', () => showPoi(p));
     if (showLabel) {
       m.bindTooltip(p.name, {
         permanent: true, direction: 'top', offset: [-4, -36], className: 'poi-label',
@@ -300,10 +340,12 @@ function renderCats() {
 function switchCat(k) { currentCat = k; renderCats(); renderMarkers(); }
 
 /* ---------- 抽屉列表 ---------- */
+// myPos 存的是 WGS-84，点位是 GCJ-02，算距离前统一转 WGS-84
+function distToMe(p) { const w = gcj2wgs(p.lat, p.lng); return haversine(myPos.lat, myPos.lng, w.lat, w.lng); }
 function renderList() {
   let list = filteredPois();
   if (myPos) {
-    list = list.map(p => ({ ...p, _d: haversine(myPos.lat, myPos.lng, p.lat, p.lng) }))
+    list = list.map(p => ({ ...p, _d: distToMe(p) }))
                .sort((a, b) => a._d - b._d);
   }
   $('drawerTitle').textContent =
@@ -356,12 +398,12 @@ function setCollapsed(v) {
 })();
 
 /* ---------- 选点卡 ---------- */
-function flyTo(p) { map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 17), { duration: .6 }); }
+function flyTo(p) { map.flyTo(toMapLatLng(p.lat, p.lng, false), Math.max(map.getZoom(), 17), { duration: .6 }); }
 function showPoi(p) {
   selected = p;
   const meta = CATEGORY_META[p.category];
   let distStr = '';
-  if (myPos) distStr = ` · 距你 ${fmtDist(haversine(myPos.lat, myPos.lng, p.lat, p.lng))}`;
+  if (myPos) distStr = ` · 距你 ${fmtDist(distToMe(p))}`;
   $('barName').textContent = meta.icon + ' ' + p.name;
   $('barMeta').textContent = `${meta.label}${p.desc ? ' · ' + p.desc : ''}${distStr}`;
   $('bar').classList.add('show');
@@ -391,8 +433,9 @@ $('barNav').onclick = () => {
 let routeLine = null;
 function drawRouteLine(p) {
   if (routeLine) map.removeLayer(routeLine);
-  const from = myPos || CAMPUS_CENTER;
-  routeLine = L.polyline([[from.lat, from.lng], [p.lat, p.lng]], {
+  const from = myPos ? toMapLatLng(myPos.lat, myPos.lng, true)
+                     : toMapLatLng(CAMPUS_CENTER.lat, CAMPUS_CENTER.lng, false);
+  routeLine = L.polyline([from, toMapLatLng(p.lat, p.lng, false)], {
     color: '#00b578', weight: 3, dashArray: '8 8', opacity: .85,
   }).addTo(map);
   map.fitBounds(routeLine.getBounds(), { padding: [60, 60] });
@@ -403,19 +446,32 @@ $('fabLocate').onclick = () => {
   if (!navigator.geolocation) { toast('浏览器不支持定位'); return; }
   toast('定位中…', 1200);
   navigator.geolocation.getCurrentPosition(pos => {
-    // ⚠️ 浏览器返回 WGS-84，腾讯底图是 GCJ-02，存在几十~几百米偏移
-    // 演示用途直接使用；如需精确可加纠偏（与小程序不同，小程序原生返回 GCJ-02）
+    // 浏览器原生返回 WGS-84；myPos 统一存 WGS-84，显示时按底图坐标系转换
     myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    const ll = toMapLatLng(myPos.lat, myPos.lng, true);
     if (!meMarker) {
-      meMarker = L.circleMarker([myPos.lat, myPos.lng], {
+      meMarker = L.circleMarker(ll, {
         radius: 8, color: '#fff', weight: 3, fillColor: '#3b82f6', fillOpacity: 1,
       }).addTo(map).bindTooltip('我的位置', { direction: 'top', offset: [0, -8] });
-    } else { meMarker.setLatLng([myPos.lat, myPos.lng]); }
-    map.flyTo([myPos.lat, myPos.lng], 17, { duration: .8 });
+    } else { meMarker.setLatLng(ll); }
+    map.flyTo(ll, 17, { duration: .8 });
     renderList();
   }, err => {
     toast('定位失败：' + (err.code === 1 ? '请允许位置权限' : err.message), 2600);
   }, { enableHighAccuracy: true, timeout: 8000 });
+};
+
+/* ---------- 底图切换 ---------- */
+$('fabBasemap').onclick = () => {
+  basemapIdx = (basemapIdx + 1) % BASEMAPS.length;
+  const bm = BASEMAPS[basemapIdx];
+  if (currentTile) map.removeLayer(currentTile);
+  currentTile = L.tileLayer(bm.url, bm.opts).addTo(map);
+  currentTile.bringToBack();
+  renderMarkers(); // 坐标系变了，marker 重摆
+  if (meMarker && myPos) meMarker.setLatLng(toMapLatLng(myPos.lat, myPos.lng, true));
+  if (routeLine && selected) drawRouteLine(selected);
+  toast('底图：' + bm.name, 1400);
 };
 
 /* ---------- 标注开关 ---------- */
